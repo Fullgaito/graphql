@@ -3,8 +3,15 @@ import fetch from 'node-fetch';
 
 const BASE_URL = 'https://api-colombia.com/api/v1';
 
-// se definen los tipos de datos para GraphQL
+const universitiesByCity = {};
+
 const typeDefs = gql`
+  type University {
+    id: ID!
+    name: String!
+    cityId: ID!
+  }
+
   type City {
     id: ID
     name: String
@@ -12,6 +19,7 @@ const typeDefs = gql`
     surface: Float
     population: Int
     postalCode: String
+    universities: [University!]!
   }
 
   type Department {
@@ -40,7 +48,7 @@ const typeDefs = gql`
     name: String
     description: String
   }
-  
+
   type President {
     id: ID
     name: String
@@ -50,12 +58,18 @@ const typeDefs = gql`
     politicalParty: String
     description: String
     cityId: ID
-    
   }
+
   type Holiday {
     date: String
     name: String
-  }  
+  }
+
+  type AddUniversityPayload {
+    success: Boolean!
+    message: String!
+    university: University
+  }
 
   type Query {
     departments: [Department!]!
@@ -64,9 +78,12 @@ const typeDefs = gql`
     constitutionArticles: [ConstitutionArticle!]!
     holidays(year: Int!): [Holiday!]!
   }
+
+  type Mutation {
+    addUniversity(cityId: ID!, name: String!): AddUniversityPayload!
+  }
 `;
 
-// se definen los resolvers para cada consulta, utilizando fetch para obtener los datos
 const resolvers = {
   Query: {
     departments: async () => {
@@ -75,9 +92,9 @@ const resolvers = {
       return res.json();
     },
 
-    presidents: async (_, { id }) => {
+    presidents: async () => {
       const res = await fetch(`${BASE_URL}/President`);
-      if (!res.ok) return null;
+      if (!res.ok) return [];
       return res.json();
     },
 
@@ -99,12 +116,71 @@ const resolvers = {
       return res.json();
     },
   },
+
+  Department: {
+    cityCapital: async (parent) => {
+      if (!parent.capitalId && !parent.cityCapitalId) return null;
+      const capitalId = parent.capitalId ?? parent.cityCapitalId;
+      const res = await fetch(`${BASE_URL}/City/${capitalId}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+  },
+
+  City: {
+    universities: (parent) => {
+      const cityId = String(parent.id);
+      return universitiesByCity[cityId] ?? [];
+    },
+  },
+
+  Mutation: {
+    addUniversity: (_, { cityId, name }) => {
+      const key = String(cityId);
+
+      if (!name?.trim()) {
+        return {
+          success: false,
+          message: 'El nombre de la universidad no puede estar vacío.',
+          university: null,
+        };
+      }
+
+      if (!universitiesByCity[key]) {
+        universitiesByCity[key] = [];
+      }
+
+      const exists = universitiesByCity[key].some(
+        (u) => u.name.toLowerCase() === name.trim().toLowerCase()
+      );
+
+      if (exists) {
+        return {
+          success: false,
+          message: `Ya existe una universidad llamada "${name}" en la ciudad ${cityId}.`,
+          university: null,
+        };
+      }
+
+      const newUniversity = {
+        id: `${key}-${Date.now()}`,
+        name: name.trim(),
+        cityId: key,
+      };
+
+      universitiesByCity[key].push(newUniversity);
+
+      return {
+        success: true,
+        message: 'Universidad agregada correctamente.',
+        university: newUniversity,
+      };
+    },
+  },
 };
 
-// Create the Apollo Server instance
 const server = new ApolloServer({ typeDefs, resolvers });
 
-// Start the server
 server.listen().then(({ url }) => {
   console.log(`Server ready at ${url}`);
 });
