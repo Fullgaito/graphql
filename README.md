@@ -1,4 +1,4 @@
-#  ![alt text](image.png) GraphQL Colombia API 
+# GraphQL Colombia API 
 
 Servidor GraphQL construido con Apollo Server que expone datos de la API pública [api-colombia.com](https://api-colombia.com). Incluye soporte para consultar departamentos, presidentes, regiones, artículos de la constitución y festivos — más una capa de mutaciones para registrar universidades por ciudad.
 
